@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# squadrack
+# Runtime state of a deployment never belongs in this repo
+data/

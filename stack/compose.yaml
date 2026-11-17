@@ -44,3 +44,41 @@ services:
     healthcheck:
       <<: *healthcheck
       test: ["CMD-SHELL", 'curl -fsS -o /dev/null http://127.0.0.1:8333/healthz']
+  mlflow:
+    build: ./mlflow
+    image: squadrack-mlflow:3.18.0
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      # Each worker is a separate Python process; 2 are enough for a small team (the default is 4)
+      - --workers=2
+      - --app-name=basic-auth
+      # Host headers to accept: the host port and the service name for containers in the stack network
+      - --allowed-hosts=localhost:*,127.0.0.1:*,mlflow:*
+      # User, database and password come from the PG* variables below
+      - --backend-store-uri=postgresql://postgres:5432/
+      # Clients send artifacts to the server, the server writes them to S3
+      - --serve-artifacts
+      - --artifacts-destination=s3://mlflow
+    environment:
+      PGUSER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      PGDATABASE: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      MLFLOW_S3_ENDPOINT_URL: http://s3:8333
+      AWS_ACCESS_KEY_ID: ${S3_ADMIN_ACCESS_KEY:?set S3_ADMIN_ACCESS_KEY in .env}
+      AWS_SECRET_ACCESS_KEY: ${S3_ADMIN_SECRET_KEY:?set S3_ADMIN_SECRET_KEY in .env}
+      MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_ADMIN_PASSWORD:?set MLFLOW_ADMIN_PASSWORD in .env}
+      MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_SECRET_KEY:?set MLFLOW_SECRET_KEY in .env}
+    ports:
+      - "127.0.0.1:5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3:
+        condition: service_healthy
+    restart: *restart
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4)"]

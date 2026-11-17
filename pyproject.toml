@@ -1,0 +1,9 @@
+[project]
+name = "squadrack"
+version = "0.1.0"
+description = "Self-hosted MLOps stack for a small ML team sharing one GPU server: S3, MLflow, Postgres and shared caches"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.44.4",
+]

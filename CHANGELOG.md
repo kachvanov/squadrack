@@ -18,6 +18,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 - `scripts/doctor.py` – checks S3, MLflow tracking, the artifact proxy and the registry in one run and cleans up after itself.
 - CI: pre-commit with gitleaks, compose validation, e2e on a fresh stack with `doctor.py` and the demo.
 - `examples/deploy/` – template of a deploy repo with `up.sh`, `deploy.env` and `compose.override.yaml`.
+- README quick start: from `git clone` to a model loaded from the registry in four steps.
 - Data directory and host ports of `stack/compose.yaml` come from `SQUADRACK_DATA_DIR`, `MLFLOW_PORT`, `S3_PORT`, `S3_ADMIN_UI_PORT`; ports always bind to `127.0.0.1`.
 
 ### Security

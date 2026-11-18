@@ -18,6 +18,36 @@ A few people, several ML projects, one GPU server you do not fully own. squadrac
 
 Plus `scripts/doctor.py` to check a running stack and `examples/deploy/`, a template of a deploy repo. Planned: scripts to prepare the host, add a project or a user and publish a model for serving.
 
+## Quick start
+
+Needs Docker Engine 25+ with Compose v2.24+, `openssl` and [uv](https://docs.astral.sh/uv/). Runs on one machine, everything on `127.0.0.1`.
+
+```bash
+git clone https://github.com/kachvanov/squadrack && cd squadrack
+
+# 1. Stack secrets: every change-me becomes its own random value
+awk '/change-me/ { c = "openssl rand -hex 32"; c | getline s; close(c); sub(/change-me[^ ]*/, s) } 1' \
+  stack/.env.example > stack/.env && chmod 600 stack/.env
+
+# 2. Start Postgres, S3 and MLflow and wait until all three are healthy (the first build takes a few minutes)
+docker compose -f stack/compose.yaml up -d --build --wait
+
+# 3. Client settings for scripts/ and examples/: the same S3 key and MLflow password
+( . stack/.env && sed -e "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=$S3_ADMIN_ACCESS_KEY|" \
+    -e "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=$S3_ADMIN_SECRET_KEY|" \
+    -e "s|^MLFLOW_TRACKING_PASSWORD=.*|MLFLOW_TRACKING_PASSWORD=$MLFLOW_ADMIN_PASSWORD|" \
+    .env.example > .env ) && chmod 600 .env
+
+# 4. Check the stack, then train a model and load it back from the registry
+uv run --env-file .env scripts/doctor.py
+uv run --env-file .env examples/train_demo.py
+uv run --env-file .env examples/predict_demo.py
+```
+
+MLflow UI: http://localhost:5000, user `admin`, password `MLFLOW_ADMIN_PASSWORD` from `stack/.env`. S3 API: http://localhost:8333; SeaweedFS Admin UI: http://localhost:12535, user `admin`, password `S3_ADMIN_UI_PASSWORD`.
+
+Stop with `docker compose -f stack/compose.yaml down`; data stays in `stack/data/`. For a server, use a deploy repo instead – see [Deployments](#deployments).
+
 ## Layout
 
 ```

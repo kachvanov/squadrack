@@ -1,5 +1,10 @@
 name: squadrack
 
+# Host-specific values come from the environment of `docker compose`, set by a deploy repo
+# (see examples/deploy/). Defaults fit a local run from this directory:
+#   SQUADRACK_DATA_DIR             where service data lives (default ./data next to this file)
+#   MLFLOW_PORT, S3_PORT, S3_ADMIN_UI_PORT   host ports; they always bind to 127.0.0.1 only
+
 x-restart: &restart unless-stopped
 
 x-healthcheck: &healthcheck
@@ -17,7 +22,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
     volumes:
-      - ./data/pg:/var/lib/postgresql
+      - ${SQUADRACK_DATA_DIR:-./data}/pg:/var/lib/postgresql
     restart: *restart
     healthcheck:
       <<: *healthcheck
@@ -36,10 +41,10 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_ADMIN_SECRET_KEY:?set S3_ADMIN_SECRET_KEY in .env}
       WEED_ADMIN_PASSWORD: ${S3_ADMIN_UI_PASSWORD:?set S3_ADMIN_UI_PASSWORD in .env}
     volumes:
-      - ./data/s3:/data
+      - ${SQUADRACK_DATA_DIR:-./data}/s3:/data
     ports:
-      - "127.0.0.1:8333:8333"   # S3 API
-      - "127.0.0.1:12535:12535" # Admin UI
+      - "127.0.0.1:${S3_PORT:-8333}:8333"                  # S3 API
+      - "127.0.0.1:${S3_ADMIN_UI_PORT:-12535}:12535"       # Admin UI
     restart: *restart
     healthcheck:
       <<: *healthcheck
@@ -71,8 +76,10 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_ADMIN_SECRET_KEY:?set S3_ADMIN_SECRET_KEY in .env}
       MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_ADMIN_PASSWORD:?set MLFLOW_ADMIN_PASSWORD in .env}
       MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_SECRET_KEY:?set MLFLOW_SECRET_KEY in .env}
+      # No usage reports to mlflow-telemetry.io, from the server and from the UI it serves
+      MLFLOW_DISABLE_TELEMETRY: "true"
     ports:
-      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:${MLFLOW_PORT:-5000}:5000"
     depends_on:
       postgres:
         condition: service_healthy

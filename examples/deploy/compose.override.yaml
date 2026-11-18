@@ -1,0 +1,17 @@
+# Host-specific additions to the product's stack/compose.yaml; compose merges this file over it.
+# Relative paths here resolve against the product's stack/ directory, not this one.
+
+# Cap container logs: the default json-file driver keeps them forever, on the disk of /var/lib/docker
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
+services:
+  postgres:
+    logging: *logging
+  s3:
+    logging: *logging
+  mlflow:
+    logging: *logging

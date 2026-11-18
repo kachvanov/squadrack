@@ -2,7 +2,7 @@
 
 Self-hosted MLOps stack for a small ML team sharing one GPU server: S3, MLflow, Postgres and shared caches for many projects.
 
-> **Status:** v0.1 in progress. Not ready for use yet.
+> **Status:** v0.1.0 – one stack on one host, a check for it and an example deployment. Per-project S3 keys, MLflow users and host setup scripts are planned, not there yet.
 
 ## Who it is for
 
@@ -16,15 +16,15 @@ A few people, several ML projects, one GPU server you do not fully own. squadrac
 | Postgres | MLflow backend store: runs, metrics, model registry, users |
 | MLflow | Experiment tracking and model registry with basic auth |
 
-Plus shell scripts to prepare the host, add a project or a user, publish a model for serving and check the setup.
+Plus `scripts/doctor.py` to check a running stack and `examples/deploy/`, a template of a deploy repo. Planned: scripts to prepare the host, add a project or a user and publish a model for serving.
 
 ## Layout
 
 ```
-stack/      compose file, Dockerfiles, config templates, .env.example
-scripts/    host setup, add-project, add-user, publish-model, doctor
-examples/   a sample deployment and a demo project
-docs/       architecture, permissions, decisions
+stack/             compose file, MLflow Dockerfile and config, .env.example
+scripts/           s3_check.py, doctor.py
+examples/          train and predict demo for MLflow
+examples/deploy/   template of a deploy repo: up.sh, deploy.env, compose.override.yaml
 ```
 
 ## Check a running stack
@@ -37,7 +37,7 @@ uv run --env-file .env scripts/doctor.py
 
 ## Deployments
 
-The product holds no host-specific values. Every installation keeps them in its own **deploy repo** (paths, groups, ports, GPU overrides, product version) and its secrets in a `.env` file that never goes to git.
+The product holds no host-specific values. Every installation keeps them in its own **deploy repo** (product version, paths, ports, compose overrides) and its secrets in a `.env` file that never goes to git. Start from [`examples/deploy/`](examples/deploy/README.md); changes are listed in the [CHANGELOG](CHANGELOG.md).
 
 ## License
 

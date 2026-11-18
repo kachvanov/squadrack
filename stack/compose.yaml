@@ -71,6 +71,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_ADMIN_SECRET_KEY:?set S3_ADMIN_SECRET_KEY in .env}
       MLFLOW_AUTH_ADMIN_PASSWORD: ${MLFLOW_ADMIN_PASSWORD:?set MLFLOW_ADMIN_PASSWORD in .env}
       MLFLOW_FLASK_SERVER_SECRET_KEY: ${MLFLOW_SECRET_KEY:?set MLFLOW_SECRET_KEY in .env}
+      # No usage reports to mlflow-telemetry.io, from the server and from the UI it serves
+      MLFLOW_DISABLE_TELEMETRY: "true"
     ports:
       - "127.0.0.1:5000:5000"
     depends_on:

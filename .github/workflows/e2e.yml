@@ -44,10 +44,14 @@ jobs:
             exit 1
           fi
 
+      # Before the stack: the cache key globs the whole checkout, and stack/data/ is owned by
+      # the containers. The lock file alone describes the environment.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          cache-dependency-glob: uv.lock
+
       - name: Start the stack
         run: docker compose -f stack/compose.yaml up --detach --build --wait --wait-timeout 180
-
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
       - name: doctor.py
         run: uv run --locked --env-file .env scripts/doctor.py

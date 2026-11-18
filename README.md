@@ -27,6 +27,16 @@ examples/   a sample deployment and a demo project
 docs/       architecture, permissions, decisions
 ```
 
+## Check a running stack
+
+```
+uv run --env-file .env scripts/doctor.py
+```
+
+`doctor.py` writes a small probe to S3, MLflow tracking, the artifact proxy and the model registry, reads it back and removes it. It stops at the first failed check with a hint on what to fix. CI runs it on a fresh stack for every pull request (`.github/workflows/e2e.yml`).
+
+## Deployments
+
 The product holds no host-specific values. Every installation keeps them in its own **deploy repo** (paths, groups, ports, GPU overrides, product version) and its secrets in a `.env` file that never goes to git.
 
 ## License

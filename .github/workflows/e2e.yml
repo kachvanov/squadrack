@@ -1,0 +1,71 @@
+name: e2e
+
+# Bring the whole stack up from stack/compose.yaml on a clean runner and check it with doctor.py
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Write .env files from the templates with throwaway secrets
+        run: |
+          secret() { openssl rand -hex 16; }
+          set_var() { sed -i "s|^$2=.*|$2=$3|" "$1"; }
+
+          pg_password=$(secret); s3_key=$(secret); s3_secret=$(secret)
+          s3_ui_password=$(secret); mlflow_password=$(secret); mlflow_secret_key=$(secret)
+          for s in "$pg_password" "$s3_secret" "$s3_ui_password" "$mlflow_password" "$mlflow_secret_key"; do
+            echo "::add-mask::$s"
+          done
+
+          cp stack/.env.example stack/.env
+          cp .env.example .env
+          set_var stack/.env POSTGRES_PASSWORD "$pg_password"
+          set_var stack/.env S3_ADMIN_ACCESS_KEY "$s3_key"
+          set_var stack/.env S3_ADMIN_SECRET_KEY "$s3_secret"
+          set_var stack/.env S3_ADMIN_UI_PASSWORD "$s3_ui_password"
+          set_var stack/.env MLFLOW_ADMIN_PASSWORD "$mlflow_password"
+          set_var stack/.env MLFLOW_SECRET_KEY "$mlflow_secret_key"
+          set_var .env AWS_ACCESS_KEY_ID "$s3_key"
+          set_var .env AWS_SECRET_ACCESS_KEY "$s3_secret"
+          set_var .env MLFLOW_TRACKING_PASSWORD "$mlflow_password"
+          if grep -q change-me stack/.env .env; then
+            echo "a variable in a template was not filled in:"; grep -n change-me stack/.env .env | cut -d= -f1
+            exit 1
+          fi
+
+      # Before the stack: the cache key globs the whole checkout, and stack/data/ is owned by
+      # the containers. The lock file alone describes the environment.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          cache-dependency-glob: uv.lock
+
+      - name: Start the stack
+        run: docker compose -f stack/compose.yaml up --detach --build --wait --wait-timeout 180
+
+      - name: doctor.py
+        run: uv run --locked --env-file .env scripts/doctor.py
+
+      - name: doctor.py again, on the state the first run left
+        run: uv run --locked --env-file .env scripts/doctor.py
+
+      - name: Train and load the demo model
+        run: |
+          uv run --locked --env-file .env examples/train_demo.py
+          uv run --locked --env-file .env examples/predict_demo.py
+
+      - name: Stack status and logs
+        if: failure()
+        run: |
+          docker compose -f stack/compose.yaml ps --all
+          docker compose -f stack/compose.yaml logs --no-color --tail 200

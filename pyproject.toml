@@ -6,4 +6,9 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "boto3>=1.44.4",
+    "matplotlib>=3.11.2",
+    "mlflow-skinny>=3.18.0",
+    "pandas>=3.1.1",
+    "scikit-learn>=1.9.1",
+    "skops>=0.16.0",
 ]

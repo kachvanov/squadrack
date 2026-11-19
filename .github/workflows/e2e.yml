@@ -111,7 +111,49 @@ jobs:
       - name: doctor.py
         run: uv run --locked --env-file .env scripts/doctor.py
 
-      - name: doctor.py again, on the state the first run left
+      # A project key reaches its own bucket only; a person gets an MLflow login that is not an admin.
+      # Secrets go to files with mode 600 and never to the log.
+      - name: A project key and an MLflow user from scripts/access.sh
+        run: |
+          dir=$RUNNER_TEMP/access
+          mkdir "$dir"
+          scripts/access.sh s3-key demo-project-svc demo-project "$dir/s3.env"
+          scripts/access.sh mlflow-user ci-person "$dir/mlflow.env"
+          for f in s3 mlflow; do
+            [ "$(stat -c %a "$dir/$f.env")" = 600 ] || { echo "$f.env is not mode 600"; exit 1; }
+          done
+          grep -q '^AWS_SECRET_ACCESS_KEY=.' "$dir/s3.env"
+          grep -q '^MLFLOW_TRACKING_PASSWORD=.' "$dir/mlflow.env"
+
+          # Refuses an existing user, an existing file and the artifact bucket, and leaves no file behind.
+          # `if`, not `!`: bash -e does not stop on a negated command that succeeds.
+          must_fail() { if "$@"; then echo "should have failed: $*"; exit 1; fi; }
+          must_fail scripts/access.sh s3-key demo-project-svc demo-project "$dir/again.env"
+          must_fail scripts/access.sh mlflow-user ci-person "$dir/again.env"
+          must_fail scripts/access.sh s3-key other-svc demo-project "$dir/s3.env"
+          must_fail scripts/access.sh s3-key other-svc mlflow "$dir/other.env"
+          if [ -e "$dir/again.env" ] || [ -e "$dir/other.env" ]; then echo "a refused call left a file"; exit 1; fi
+          scripts/access.sh list
+
+          # Client settings of the project: addresses from .env, the new key and login
+          grep -E '^(AWS_ENDPOINT_URL|MLFLOW_TRACKING_URI|MLFLOW_DISABLE_TELEMETRY)=' .env > "$dir/project.env"
+          cat "$dir/s3.env" "$dir/mlflow.env" >> "$dir/project.env"
+
+      - name: doctor.py with the project key and the new login
+        run: uv run --locked --env-file "$RUNNER_TEMP/access/project.env" scripts/doctor.py --project-key
+
+      - name: A new key with s3-rotate works, the old one is rejected
+        run: |
+          dir=$RUNNER_TEMP/access
+          scripts/access.sh s3-rotate demo-project-svc "$dir/rotated.env"
+          if uv run --locked --env-file "$dir/project.env" scripts/doctor.py --project-key --only s3; then
+            echo "the old key still works"; exit 1
+          fi
+          grep -vE '^AWS_(ACCESS_KEY_ID|SECRET_ACCESS_KEY)=' "$dir/project.env" > "$dir/rotated-project.env"
+          cat "$dir/rotated.env" >> "$dir/rotated-project.env"
+          uv run --locked --env-file "$dir/rotated-project.env" scripts/doctor.py --project-key --only s3
+
+      - name: doctor.py with the admin key again, on the state the runs before left
         run: uv run --locked --env-file .env scripts/doctor.py
 
       - name: Train and load the demo model

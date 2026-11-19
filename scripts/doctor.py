@@ -11,6 +11,10 @@ Run from the repo root:
 
     uv run --env-file .env scripts/doctor.py               # S3 and MLflow
     uv run --env-file .env scripts/doctor.py --only mlflow # an MLflow client without an S3 key
+    uv run --env-file .env scripts/doctor.py --project-key # a key from scripts/access.sh s3-key
+
+With --project-key the S3 key must reach the project bucket (--bucket) and nothing else: writing
+to the MLflow artifact bucket, creating a bucket and writing to a missing one must be denied.
 
 What stays behind: the experiment `squadrack-doctor/<user>`, reused by every run, and the
 probe runs inside it, marked deleted: hidden in the UI, a few rows in Postgres, no files.
@@ -137,9 +141,14 @@ def check_bucket(s3, bucket: str, report: Report) -> None:
     try:
         s3.head_bucket(Bucket=bucket)
     except ClientError as e:
-        if e.response["Error"]["Code"] in ("404", "NoSuchBucket", "NotFound"):
-            raise CheckFailed(f"bucket {bucket} does not exist (-bucket of the s3 service in "
-                              "stack/compose.yaml)") from e
+        code = e.response["Error"]["Code"]
+        if code in ("404", "NoSuchBucket", "NotFound"):
+            raise CheckFailed(f"bucket {bucket} does not exist (-bucket of the seaweedfs service in "
+                              "stack/compose.yaml, or scripts/access.sh s3-key)") from e
+        if code in ("403", "AccessDenied"):
+            hint = ("a project key? Run with --project-key" if bucket == ARTIFACT_BUCKET
+                    else "the key of another bucket? Set --bucket to the bucket of the key")
+            raise CheckFailed(f"the S3 key has no access to bucket {bucket}: {hint}") from e
         raise
     report.step("s3", f"bucket {bucket} exists")
 
@@ -156,6 +165,41 @@ def check_s3_roundtrip(s3, bucket: str, cleanup: Cleanup, report: Report) -> Non
     if sha256(got) != sha256(data):
         raise CheckFailed(f"s3://{bucket}/{key}: downloaded bytes differ from the uploaded ones")
     report.step("s3", f"put and get s3://{bucket}/{key}: {PROBE_SIZE // 1024} KiB, sha256 matches")
+
+
+def expect_denied(what: str, call: Callable[[], object], undo: Callable[[], None],
+                  cleanup: Cleanup) -> None:
+    try:
+        call()
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("AccessDenied", "403"):
+            return
+        raise
+    cleanup.add(f"{what}: undone", undo)
+    raise CheckFailed(f"the project key can {what}: it is not limited to its bucket. "
+                      "Use a key from scripts/access.sh s3-key, not the admin key")
+
+
+def check_key_limits(s3, bucket: str, cleanup: Cleanup, report: Report) -> None:
+    """A project key from scripts/access.sh reaches its own bucket only."""
+    key = f"{S3_PROBE_PREFIX}{os.urandom(8).hex()}.bin"
+    expect_denied(f"write to s3://{ARTIFACT_BUCKET}",
+                  lambda: s3.put_object(Bucket=ARTIFACT_BUCKET, Key=key, Body=b"probe"),
+                  lambda: s3.delete_object(Bucket=ARTIFACT_BUCKET, Key=key), cleanup)
+    new_bucket = f"squadrack-doctor-{os.urandom(4).hex()}"
+    expect_denied(f"create bucket {new_bucket}",
+                  lambda: s3.create_bucket(Bucket=new_bucket),
+                  lambda: s3.delete_bucket(Bucket=new_bucket), cleanup)
+
+    # With the admin key SeaweedFS creates a missing bucket on the first write
+    def undo_write() -> None:
+        s3.delete_object(Bucket=new_bucket, Key=key)
+        s3.delete_bucket(Bucket=new_bucket)
+    expect_denied(f"write to the missing bucket {new_bucket}",
+                  lambda: s3.put_object(Bucket=new_bucket, Key=key, Body=b"probe"), undo_write, cleanup)
+    visible = [b["Name"] for b in s3.list_buckets()["Buckets"]]
+    report.step("s3", f"key limited to {bucket}: writing to {ARTIFACT_BUCKET}, creating a bucket "
+                      f"and writing to a missing one denied; sees {', '.join(visible) or 'no buckets'}")
 
 
 def s3_keys(s3, bucket: str, prefix: str) -> list[str]:
@@ -326,8 +370,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--only", choices=["s3", "mlflow"], help="check one service only")
     parser.add_argument("--bucket", default="demo-project", help="project bucket to check (default: demo-project)")
+    parser.add_argument("--project-key", action="store_true",
+                        help="the S3 key is a project key: check that it reaches --bucket only")
     args = parser.parse_args()
     use_s3, use_mlflow = args.only in (None, "s3"), args.only in (None, "mlflow")
+    if args.project_key and not use_s3:
+        parser.error("--project-key checks the S3 key: it does not go with --only mlflow")
 
     report = Report()
     cleanup = Cleanup(report)
@@ -337,15 +385,20 @@ def main() -> int:
         s3 = None
         if use_s3:
             s3 = make_s3(report)
-            check_bucket(s3, ARTIFACT_BUCKET, report)
+            if not args.project_key:
+                check_bucket(s3, ARTIFACT_BUCKET, report)
             check_bucket(s3, args.bucket, report)
             check_s3_roundtrip(s3, args.bucket, cleanup, report)
-        run = check_mlflow(s3, cleanup, report) if use_mlflow else None
+            if args.project_key:
+                check_key_limits(s3, args.bucket, cleanup, report)
+        # A project key cannot read the artifact bucket: artifacts are checked through MLflow only
+        artifact_s3 = None if args.project_key else s3
+        run = check_mlflow(artifact_s3, cleanup, report) if use_mlflow else None
         # Clean up now rather than at exit, to see that nothing is left
         if not cleanup.run():
             raise CheckFailed("cleanup failed, see above")
-        if s3 is not None and run is not None:
-            check_nothing_left(s3, run, report)
+        if artifact_s3 is not None and run is not None:
+            check_nothing_left(artifact_s3, run, report)
         ok = True
     except CheckFailed as e:
         print(f"FAIL: {e}", file=sys.stderr)

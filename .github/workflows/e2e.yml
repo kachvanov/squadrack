@@ -62,6 +62,52 @@ jobs:
       - name: Start the stack
         run: docker compose -f stack/compose.yaml up --detach --build --wait --wait-timeout 180
 
+      # SeaweedFS answers on its master, volume and filer ports without a key. Neither the host nor
+      # a container outside the storage network may reach them; S3 and the Admin UI go through s3.
+      # Checked by HTTP, not by connect: Docker Desktop accepts a TCP connection to any address.
+      - name: SeaweedFS is reachable only through the s3 proxy
+        run: |
+          compose() { docker compose -f stack/compose.yaml "$@"; }
+          cid=$(compose ps -q seaweedfs)
+          ips=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$cid")
+          echo "seaweedfs: $ips"
+          [ -n "${ips// }" ] || { echo "seaweedfs has no address"; exit 1; }
+
+          net=$(docker network inspect -f '{{.Id}}' squadrack_storage)
+          ip link show dev "br-${net:0:12}" > /dev/null
+          if ip -4 -o addr show dev "br-${net:0:12}" | grep .; then
+            echo "the bridge of the storage network has an address on the host"; exit 1
+          fi
+
+          reached=0
+          for ip in $ips; do
+            for port in 8888 9333 9340 8333 12535; do
+              if curl -sS -o /dev/null --max-time 3 "http://$ip:$port/"; then
+                echo "host reaches $ip:$port"; reached=1
+              fi
+            done
+          done
+          compose exec -T -e IPS="$ips" mlflow python - <<'EOF' || reached=1
+          import os, sys, urllib.error, urllib.request
+          reached = []
+          for host in ["seaweedfs", *os.environ["IPS"].split()]:
+              for port in (8888, 9333, 9340):
+                  try:
+                      urllib.request.urlopen(f"http://{host}:{port}/", timeout=3)
+                      reached.append(f"{host}:{port}")
+                  except urllib.error.HTTPError:
+                      reached.append(f"{host}:{port}")
+                  except OSError as e:
+                      print(f"mlflow does not reach {host}:{port}: {e}")
+          if reached:
+              sys.exit(f"mlflow reaches {', '.join(reached)}")
+          EOF
+          [ "$reached" = 0 ] || exit 1
+
+          curl -fsS -o /dev/null http://127.0.0.1:8333/healthz && echo "S3 through the proxy: ok"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:12535/)
+          case $code in 2??|3??) echo "Admin UI through the proxy: $code" ;; *) echo "Admin UI: $code"; exit 1 ;; esac
+
       - name: doctor.py
         run: uv run --locked --env-file .env scripts/doctor.py
 

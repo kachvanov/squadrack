@@ -4,6 +4,9 @@ name: squadrack
 # (see examples/deploy/). Defaults fit a local run from this directory:
 #   SQUADRACK_DATA_DIR             where service data lives (default ./data next to this file)
 #   MLFLOW_PORT, S3_PORT, S3_ADMIN_UI_PORT   host ports; they always bind to 127.0.0.1 only
+#
+# SeaweedFS answers on its master, volume, filer and IAM ports without a key, so it lives alone in
+# the network `storage`, and the s3 proxy lets only the S3 API and the Admin UI out of it.
 
 x-restart: &restart unless-stopped
 
@@ -27,7 +30,7 @@ services:
     healthcheck:
       <<: *healthcheck
       test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
-  s3:
+  seaweedfs:
     image: chrislusf/seaweedfs:4.54
     command:
       - mini
@@ -42,13 +45,27 @@ services:
       WEED_ADMIN_PASSWORD: ${S3_ADMIN_UI_PASSWORD:?set S3_ADMIN_UI_PASSWORD in .env}
     volumes:
       - ${SQUADRACK_DATA_DIR:-./data}/s3:/data
-    ports:
-      - "127.0.0.1:${S3_PORT:-8333}:8333"                  # S3 API
-      - "127.0.0.1:${S3_ADMIN_UI_PORT:-12535}:12535"       # Admin UI
+    networks: [storage]
     restart: *restart
     healthcheck:
       <<: *healthcheck
       test: ["CMD-SHELL", 'curl -fsS -o /dev/null http://127.0.0.1:8333/healthz']
+  # The S3 endpoint of the stack: http://s3:8333 for containers, S3_PORT on the host
+  s3:
+    build: ./s3-proxy
+    image: squadrack-s3-proxy:3.4.8
+    networks: [default, storage]
+    ports:
+      - "127.0.0.1:${S3_PORT:-8333}:8333"                  # S3 API
+      - "127.0.0.1:${S3_ADMIN_UI_PORT:-12535}:12535"       # Admin UI
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    restart: *restart
+    healthcheck:
+      <<: *healthcheck
+      # Through the proxy to SeaweedFS: healthy only when the whole path works
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8333/healthz"]
   mlflow:
     build: ./mlflow
     image: squadrack-mlflow:3.18.0
@@ -89,3 +106,12 @@ services:
     healthcheck:
       <<: *healthcheck
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=4)"]
+
+networks:
+  # internal: no route out; gateway mode isolated (Docker 28+): the bridge gets no address on the
+  # host, so host processes do not reach the containers in it either. IPv4 only.
+  storage:
+    internal: true
+    enable_ipv6: false
+    driver_opts:
+      com.docker.network.bridge.gateway_mode_ipv4: isolated

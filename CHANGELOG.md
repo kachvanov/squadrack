@@ -4,7 +4,13 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.1] – 2026-11-20
+## [0.1.2] – 2026-11-19
+
+### Fixed
+
+- 0.1.1 did not fix the crash loop on a host where the checkout has an ACL: BuildKit applies the ACL of the source file after `COPY --chmod`, so `basic_auth.ini` stayed unreadable. The mode is now set by `chmod` in a `RUN` step, and CI e2e builds from a tree under an ACL instead of a plain `chmod o-rwx`.
+
+## [0.1.1] – 2026-11-19
 
 ### Fixed
 
@@ -31,5 +37,6 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.1.2]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.2
 [0.1.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.0

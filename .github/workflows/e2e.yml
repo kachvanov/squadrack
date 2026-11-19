@@ -50,10 +50,14 @@ jobs:
         with:
           cache-dependency-glob: uv.lock
 
-      # A clone on a shared host under a default ACL has no bits for others (0660), and COPY
-      # keeps those bits in the image. Build from such a tree, so images never depend on them.
-      - name: Close the build context to others, like a clone on a shared host
-        run: chmod -R o-rwx stack
+      # A clone on a shared host lives under a default ACL with no bits for others, and BuildKit
+      # applies that ACL to copied files even after COPY --chmod. Build from such a tree, so images
+      # never depend on the modes of the checkout.
+      - name: Put the build context under an ACL, like a clone on a shared host
+        run: |
+          command -v setfacl > /dev/null || { sudo apt-get update -q && sudo apt-get install -yq acl; }
+          setfacl -R -m g:adm:rwX,o::- stack
+          getfacl -c stack/mlflow/basic_auth.ini
 
       - name: Start the stack
         run: docker compose -f stack/compose.yaml up --detach --build --wait --wait-timeout 180

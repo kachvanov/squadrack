@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] – 2026-11-19
+
+### Added
+
+- `scripts/access.sh`: an S3 key per project, limited to one bucket with no right to create or delete buckets (`s3-key`, `s3-rotate`), an MLflow login per person that is not an admin (`mlflow-user`), and `list`. Secrets go straight into new files with mode 600 and never to the terminal. In a deployment it runs through the deploy repo's `up.sh` (`SQUADRACK_COMPOSE`).
+- `doctor.py --project-key`: checks that the S3 key reaches its bucket and that writing to the MLflow artifact bucket, creating a bucket and writing to a missing one are denied. Without the flag a project key now fails with a hint instead of a bare 403.
+- CI e2e gives `demo-project` its own key and a person a login, runs `doctor.py` with them, rotates the key and checks that the old one is rejected and the admin key keeps working.
+
+### Upgrading
+
+- Nothing to migrate: no service changes. Admins can now move projects and people off the admin key and the `admin` login.
+
 ## [0.2.0] – 2026-11-19
 
 ### Security
@@ -53,6 +65,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.3.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.2.0
 [0.1.2]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.2
 [0.1.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.1

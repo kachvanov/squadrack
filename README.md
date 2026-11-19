@@ -2,13 +2,13 @@
 
 Self-hosted MLOps stack for a small ML team sharing one GPU server: S3, MLflow, Postgres and shared caches for many projects.
 
-> **Status:** v0.3.0 – one stack on one host, S3 keys per project and MLflow logins per person, a check for it and an example deployment. Host setup scripts and onboarding a person in one command are planned, not there yet.
+> **Status:** v0.4.0 – one stack on one host, S3 keys per project and per person, MLflow logins per person, a check for it and an example deployment. Host setup scripts and onboarding a person in one command are planned, not there yet.
 
 ## Who it is for
 
 A few people, several ML projects, one GPU server you do not fully own. squadrack gives every project the same experiment tracking, artifact storage and data versioning without a Kubernetes cluster or a cloud account.
 
-## What is inside (v0.3)
+## What is inside (v0.4)
 
 | Service | Role |
 |---|---|
@@ -71,16 +71,51 @@ uv run --env-file .env scripts/doctor.py
 The admin S3 key and the `admin` MLflow login from `stack/.env` are for the stack itself and for its admins. Everyone else gets their own, from `scripts/access.sh`, run by an admin on the host of the stack:
 
 ```bash
-scripts/access.sh s3-key demo-project-svc demo-project ~/demo-project-svc.s3.env   # S3 key of a project
-scripts/access.sh mlflow-user alice ~/alice.mlflow.env                             # MLflow login of a person
-scripts/access.sh list                                                             # who has access, no secrets
+scripts/access.sh s3-key alice demo-project ~/alice.s3.env    # S3 key of a person, for one bucket
+scripts/access.sh mlflow-user alice ~/alice.mlflow.env         # MLflow login of a person
+scripts/access.sh project-key demo-project                     # S3 key of a project's services, see below
+scripts/access.sh list                                         # who has access, no secrets
 ```
 
 - **S3 key:** read and write objects in one bucket (`--readonly`: read only). No other bucket, no new buckets, no bucket deletion; the bucket is created if it is missing. Made with `s3.user.provision` of SeaweedFS, stored in its filer, so it survives restarts. A new key instead of the old one: `scripts/access.sh s3-rotate <user> <out-file>`.
 - **MLflow login:** not an admin. With `default_permission = READ` in `stack/mlflow/basic_auth.ini` it reads every experiment and model and gets `MANAGE` on what it creates; anything else is granted by an admin. Artifacts go through the MLflow server, so a person needs no S3 key for MLflow.
 - **Secrets never reach the terminal:** each command writes a new file with mode 600 as lines for an env file, and refuses to overwrite one. Combine it with the addresses from `.env.example` into the client `.env` and check: `uv run --env-file .env scripts/doctor.py --project-key`.
 
-In a deployment, point the script at the deploy repo's `up.sh`: `SQUADRACK_COMPOSE=../deploy/up.sh scripts/access.sh list`.
+In a deployment, run it through the deploy repo's `up.sh`, which knows the stack and the projects directory: `deploy/up.sh access list`.
+
+### Keys of project services
+
+Services of a project – a bot, a worker, CI – get their own S3 key, not a person's: a person leaving does not break them, and a leaked key opens one bucket only. Such keys live in one directory on the host, `SQUADRACK_PROJECTS_DIR` (in a deployment: in `deploy.env`), one subdirectory per project:
+
+```
+<projects dir>/          created once by an admin, readable by the admins only
+└── <project>/secrets/
+    └── s3-credentials   the key of <project>-svc, format of ~/.aws/credentials
+```
+
+`scripts/access.sh project-key <project>` creates the S3 user `<project>-svc` with read and write on bucket `<project>` only and writes that file: mode 0640, plus a read ACL for the host user `<project>-svc`, which the services of the project run as. No root is needed. `project-key --rotate <project>` replaces the key; restart the services afterwards. `project-check <project>` starts a one-off container as that user with the file mounted, like a service would, and checks that the key works on its bucket and nowhere else.
+
+A service gets the file as a compose secret, not as environment variables, so the key is not visible in `docker inspect`. boto3 and DVC read it from `AWS_SHARED_CREDENTIALS_FILE`:
+
+```yaml
+services:
+  worker:
+    user: "<uid>:<gid>"                  # of the host user <project>-svc
+    environment:
+      AWS_ENDPOINT_URL: http://s3:8333
+      AWS_SHARED_CREDENTIALS_FILE: /run/secrets/s3-credentials
+    secrets: [s3-credentials]
+    networks: [stack]
+secrets:
+  s3-credentials:
+    file: <projects dir>/<project>/secrets/s3-credentials
+networks:
+  stack:
+    external: true
+    name: <compose project of the stack>_default
+```
+
+Compose mounts a file secret as it is on the host; `uid`, `gid` and `mode` of a secret are not applied outside Swarm. That is why the file carries an ACL for the project user.
 
 ## Network
 

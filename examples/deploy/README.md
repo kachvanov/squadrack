@@ -36,6 +36,16 @@ deploy/up.sh
 
 Change `SQUADRACK_VERSION` in `deploy.env`, commit, run `./up.sh`. Read the CHANGELOG of the product first: a new version may need new variables in `.env`.
 
+## Access for projects and people
+
+Run `scripts/access.sh` of the product clone through `up.sh`, so it reaches the stack of this deployment:
+
+```bash
+SQUADRACK_COMPOSE=<root>/deploy/up.sh <root>/squadrack/scripts/access.sh list
+```
+
+See "Access for projects and people" in the product README.
+
 ## Check
 
 From the product clone, with a client `.env` (template: `.env.example` in the product root):

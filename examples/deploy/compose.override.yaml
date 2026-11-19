@@ -11,6 +11,8 @@ x-logging: &logging
 services:
   postgres:
     logging: *logging
+  seaweedfs:
+    logging: *logging
   s3:
     logging: *logging
   mlflow:

@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] – 2026-11-19
+
+### Security
+
+- SeaweedFS is no longer reachable from the host or from other containers. `weed mini` listens on master, volume, filer and IAM ports that take requests without a key, and any user of the host could read and write all S3 data through the filer at the container address. SeaweedFS now runs alone in the network `storage`: `internal`, gateway mode `isolated`, so its bridge has no address on the host. CI e2e checks that the host and the `mlflow` container do not reach these ports.
+
+### Changed
+
+- The `s3` service is now HAProxy 3.4.8 in TCP mode, in the stack network and in `storage`: it passes only the S3 API (8333) and the Admin UI (12535). `http://s3:8333`, `S3_PORT` and `S3_ADMIN_UI_PORT` stay as they were. SeaweedFS itself is the new service `seaweedfs`, with the same data directory `${SQUADRACK_DATA_DIR}/s3`: no data migration.
+- Docker Engine 28+ is required, for gateway mode `isolated`.
+
+### Upgrading
+
+- Stop the old `s3` and `mlflow` before `up`, with the compose files of the version you run: compose starts the new `seaweedfs` before it replaces the old `s3`, and two SeaweedFS processes would open one data directory. With a deploy repo: `./up.sh stop mlflow s3`, then set `SQUADRACK_VERSION` and run `./up.sh`.
+- Add `seaweedfs` to `compose.override.yaml` of the deploy repo wherever `s3` is, such as log limits: `s3` is the proxy now.
+
 ## [0.1.2] – 2026-11-19
 
 ### Fixed
@@ -37,6 +53,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.2.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.2.0
 [0.1.2]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.2
 [0.1.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.0

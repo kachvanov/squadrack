@@ -5,6 +5,7 @@
 #
 #   ./up.sh                   check out the pinned version, build and start, wait for healthy
 #   ./up.sh ps | logs | down  any other docker compose command on the same stack, no checkout
+#   ./up.sh access <command>  scripts/access.sh of the product on this stack: keys and logins
 #
 # Written for bash 3.2 (macOS /bin/bash) and newer.
 set -euo pipefail
@@ -58,6 +59,14 @@ compose() {
       --env-file "$secrets" \
       "$@"
 }
+
+# Keys and logins: access.sh of the checked-out product, reaching the stack through this script
+if [ "${1:-}" = access ]; then
+  shift
+  projects=
+  [ -z "${SQUADRACK_PROJECTS_DIR:-}" ] || projects=$(abs "$SQUADRACK_PROJECTS_DIR")
+  SQUADRACK_COMPOSE="$here/up.sh" SQUADRACK_PROJECTS_DIR="$projects" exec "$product/scripts/access.sh" "$@"
+fi
 
 if [ $# -gt 0 ]; then
   compose "$@"

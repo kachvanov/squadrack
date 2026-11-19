@@ -9,11 +9,11 @@ RUN pip install --no-cache-dir \
         "psycopg[binary]==3.3.9" \
         boto3==1.44.4
 
-# COPY keeps the mode the file has in the build context, and a clone under a default ACL makes it
-# 0660, unreadable for the mlflow user; configparser then silently reads nothing. The directory is
-# made first: COPY --chmod would apply 0644 to the directory it creates, too.
-RUN install -d -m 0755 /etc/mlflow
-COPY --chmod=0644 basic_auth.ini /etc/mlflow/basic_auth.ini
+# A clone on a shared host has an ACL with no bits for others, and BuildKit applies it to the copied
+# file even after COPY --chmod: the mlflow user could not read the file, and configparser silently
+# reads nothing. chmod in a RUN step works on the file as it is in the image.
+COPY basic_auth.ini /etc/mlflow/basic_auth.ini
+RUN chmod 0644 /etc/mlflow/basic_auth.ini
 ENV MLFLOW_AUTH_CONFIG_PATH=/etc/mlflow/basic_auth.ini
 
 RUN useradd --system --no-create-home --shell /usr/sbin/nologin mlflow

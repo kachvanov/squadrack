@@ -50,6 +50,11 @@ jobs:
         with:
           cache-dependency-glob: uv.lock
 
+      # A clone on a shared host under a default ACL has no bits for others (0660), and COPY
+      # keeps those bits in the image. Build from such a tree, so images never depend on them.
+      - name: Close the build context to others, like a clone on a shared host
+        run: chmod -R o-rwx stack
+
       - name: Start the stack
         run: docker compose -f stack/compose.yaml up --detach --build --wait --wait-timeout 180
 

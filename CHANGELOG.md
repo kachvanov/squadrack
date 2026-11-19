@@ -4,6 +4,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] – 2026-11-20
+
+### Fixed
+
+- MLflow no longer crash-loops with `KeyError: 'mlflow'` when the image is built from a checkout with no read bits for others, such as a clone under a default ACL on a shared host: `basic_auth.ini` is copied with mode 0644 into a 0755 directory. CI e2e now builds from such a tree.
+
 ## [0.1.0] – 2026-11-18
 
 First release: one stack on one host, a way to check it and an example deployment.
@@ -25,4 +31,5 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.1.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.1
 [0.1.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.0

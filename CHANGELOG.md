@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] – 2026-11-19
+
+### Added
+
+- Keys of project services in one directory: `SQUADRACK_PROJECTS_DIR`, `<project>/secrets/s3-credentials` inside. `scripts/access.sh project-key <project>` creates the S3 user `<project>-svc` on bucket `<project>` and writes its key in the format of `~/.aws/credentials`, mode 0640 with a read ACL for the host user `<project>-svc`; `--rotate` replaces it. `project-check <project>` uses the key from a container running as that user.
+- `up.sh access <command>` in the deploy template: `scripts/access.sh` on the stack of the deployment, with `SQUADRACK_PROJECTS_DIR` from `deploy.env`.
+- README: how a project service mounts its key as a compose secret.
+
+### Upgrading
+
+- Copy `examples/deploy/up.sh` into the deploy repo and add `SQUADRACK_PROJECTS_DIR` to `deploy.env` if you want project keys. Create that directory once, readable by the admins only. No service changes.
+
 ## [0.3.0] – 2026-11-19
 
 ### Added
@@ -65,6 +77,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.4.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.2.0
 [0.1.2]: https://github.com/kachvanov/squadrack/releases/tag/v0.1.2

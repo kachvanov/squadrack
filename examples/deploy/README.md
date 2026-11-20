@@ -7,6 +7,7 @@ A deployment of squadrack is two git clones and two host-only things side by sid
 ├── squadrack/   clone of this product; up.sh checks out SQUADRACK_VERSION
 ├── deploy/      your private deploy repo: a copy of this folder with your values
 ├── .env         secrets, from squadrack/stack/.env.example; never in git, not readable by others
+├── projects/    optional: keys of project services, <project>/secrets/; readable by the admins only
 └── data/        service data: pg/ and s3/, created by the services
 ```
 
@@ -38,11 +39,15 @@ Change `SQUADRACK_VERSION` in `deploy.env`, commit, run `./up.sh`. Read the CHAN
 
 ## Access for projects and people
 
-Run `scripts/access.sh` of the product clone through `up.sh`, so it reaches the stack of this deployment:
+`./up.sh access <command>` runs `scripts/access.sh` of the checked-out product on the stack of this deployment, with `SQUADRACK_PROJECTS_DIR` from `deploy.env`:
 
 ```bash
-SQUADRACK_COMPOSE=<root>/deploy/up.sh <root>/squadrack/scripts/access.sh list
+./up.sh access list
+./up.sh access project-key demo-project      # writes <projects dir>/demo-project/secrets/s3-credentials
+./up.sh access project-check demo-project
 ```
+
+Create the projects directory once, readable by the admins only, for example `mkdir -m 770 <root>/projects`.
 
 See "Access for projects and people" in the product README.
 

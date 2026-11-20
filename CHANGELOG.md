@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] – 2026-11-20
+
+### Fixed
+
+- `scripts/access.sh project-key`: the key file is mode 0640 again when the projects directory has a default ACL for the admins' group. `setfacl` recalculated the ACL mask to `rwx`, so the group could write the file, and the script still reported mode 640. The mask is now set to `r` explicitly; e2e runs on a directory with such a default ACL.
+
+### Upgrading
+
+- Key files created by 0.4.0 in a directory with a default ACL: `setfacl -m m::r <projects dir>/<project>/secrets/s3-credentials`, or rotate the key with `project-key --rotate`. No service changes.
+
 ## [0.4.0] – 2026-11-19
 
 ### Added
@@ -77,6 +87,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.4.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.3.0
 [0.2.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.2.0

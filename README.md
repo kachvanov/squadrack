@@ -2,7 +2,7 @@
 
 Self-hosted MLOps stack for a small ML team sharing one GPU server: S3, MLflow, Postgres and shared caches for many projects.
 
-> **Status:** v0.4.0 – one stack on one host, S3 keys per project and per person, MLflow logins per person, a check for it and an example deployment. Host setup scripts and onboarding a person in one command are planned, not there yet.
+> **Status:** v0.4.1 – one stack on one host, S3 keys per project and per person, MLflow logins per person, a check for it and an example deployment. Host setup scripts and onboarding a person in one command are planned, not there yet.
 
 ## Who it is for
 

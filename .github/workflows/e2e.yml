@@ -161,12 +161,15 @@ jobs:
         run: |
           must_fail() { if "$@"; then echo "should have failed: $*"; exit 1; fi; }
           sudo useradd --system --no-create-home --shell /usr/sbin/nologin demo-project-svc
-          mkdir -m 770 "$SQUADRACK_PROJECTS_DIR"
+          # Like a deployment: admins share the directory through a default ACL for their group
+          mkdir -m 2770 "$SQUADRACK_PROJECTS_DIR"
+          setfacl -d -m g:adm:rwX "$SQUADRACK_PROJECTS_DIR"
           file=$SQUADRACK_PROJECTS_DIR/demo-project/secrets/s3-credentials
 
           scripts/access.sh project-key demo-project
-          [ "$(stat -c %a "$file")" = 640 ] || { echo "$file is not mode 640"; exit 1; }
+          [ "$(stat -c %a "$file")" = 640 ] || { echo "$file is not mode 640"; getfacl -c "$file"; exit 1; }
           getfacl -c "$file" | grep -qx 'user:demo-project-svc:r--' || { getfacl -c "$file"; exit 1; }
+          getfacl -c "$file" | grep -qx 'mask::r--' || { echo "the group can do more than read $file"; getfacl -c "$file"; exit 1; }
           grep -q '^aws_secret_access_key = .' "$file"
           must_fail scripts/access.sh project-key demo-project
 
@@ -181,6 +184,7 @@ jobs:
           # Rotation replaces the file: the new key works, and the file keeps its mode and ACL
           scripts/access.sh project-key --rotate demo-project
           getfacl -c "$file" | grep -qx 'user:demo-project-svc:r--'
+          getfacl -c "$file" | grep -qx 'mask::r--'
           scripts/access.sh project-check demo-project
           scripts/access.sh list
 

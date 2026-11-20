@@ -169,7 +169,9 @@ open_project_secret() {
   elif ! command -v setfacl > /dev/null; then
     echo "warning   no setfacl: $user cannot read $file; install acl and run: setfacl -m u:$user:r $file" >&2
   else
-    setfacl -m "u:$user:r" "$file"
+    # The mask is given explicitly: otherwise setfacl recalculates it from all group entries, and a
+    # default ACL of the projects directory (g:<admins>:rwX) would make the file group-writable again
+    setfacl -m "u:$user:r,m::r" "$file"
     reader="$reader and $user (ACL)"
   fi
 }

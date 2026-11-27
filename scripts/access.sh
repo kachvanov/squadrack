@@ -11,6 +11,9 @@
 #   scripts/access.sh mlflow-user <user> <out-file>
 #       MLflow login with a random password, not an admin. It reads every experiment and model
 #       (default_permission in stack/mlflow/basic_auth.ini) and manages what it creates.
+#   scripts/access.sh mlflow-rotate <user> <out-file>
+#       A new random password for an MLflow user; the old one stops working at once. For `admin`
+#       the file holds the MLFLOW_ADMIN_PASSWORD line to put into the stack's .env.
 #   scripts/access.sh project-key [--rotate] <project>
 #       The S3 key of the services of <project>: user <project>-svc on bucket <project>, written to
 #       $SQUADRACK_PROJECTS_DIR/<project>/secrets/s3-credentials in the format of ~/.aws/credentials.
@@ -28,8 +31,9 @@
 #   deploy/up.sh access list
 #
 # The admin S3 key and the admin MLflow login come from the stack's .env, inside the containers:
-# nothing to pass. If the MLflow admin password was changed through the API, change
-# MLFLOW_ADMIN_PASSWORD in .env as well, or mlflow-user gets a 401.
+# nothing to pass. The server reads MLFLOW_ADMIN_PASSWORD on its first start only: after
+# `mlflow-rotate admin`, or a change through the API, put the new password into .env and bring
+# the stack up again, or the commands that log in as admin get a 401.
 #
 # Written for bash 3.2 (macOS /bin/bash) and newer.
 set -euo pipefail
@@ -38,7 +42,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 ARTIFACT_BUCKET=mlflow  # --artifacts-destination of MLflow: only the stack writes there
 
 die() { echo "access.sh: $*" >&2; exit 1; }
-usage() { sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 
 read -r -a compose <<< "${SQUADRACK_COMPOSE:-docker compose -f $here/../stack/compose.yaml}"
 weed_shell() { "${compose[@]}" exec -T seaweedfs weed shell; }
@@ -313,6 +317,35 @@ print(f"MLFLOW_TRACKING_PASSWORD={password}")
 EOF
 )
 
+# Exit status 3: no answer to the request that changes the password, so it may have taken effect
+MLFLOW_ROTATE_PASSWORD=$MLFLOW_ADMIN_CLIENT$(cat <<'EOF'
+
+import secrets
+from mlflow.exceptions import RestException
+user, password = sys.argv[1], secrets.token_urlsafe(24)
+try:
+    client.get_user(user)
+except Exception as e:
+    fail(e)
+# The password is written out before the server gets it: whatever happens next, it is not lost
+own = user == cfg["mlflow"]["admin_username"]
+if own:
+    print(f"MLFLOW_ADMIN_PASSWORD={password}", flush=True)
+else:
+    print(f"MLFLOW_TRACKING_USERNAME={user}")
+    print(f"MLFLOW_TRACKING_PASSWORD={password}", flush=True)
+try:
+    # MLflow asks for the current password when a user changes their own, as admin does here
+    client.update_user_password(
+        user, password, current_password=os.environ["MLFLOW_AUTH_ADMIN_PASSWORD"] if own else None)
+except RestException as e:
+    fail(e)  # the server refused: nothing changed
+except Exception as e:
+    print(f"MLflow: {getattr(e, 'error_code', type(e).__name__)}: {getattr(e, 'message', e)}", file=sys.stderr)
+    sys.exit(3)
+EOF
+)
+
 MLFLOW_LIST_USERS=$MLFLOW_ADMIN_CLIENT$(cat <<'EOF'
 
 from mlflow.server.auth.routes import LIST_USERS
@@ -335,6 +368,25 @@ mlflow_user() {
   keep_secret_file
 }
 
+mlflow_rotate() {
+  [ $# -eq 2 ] || usage
+  local user=$1 status=0
+  check_user "$user"
+  new_secret_file "$2"
+  mlflow_python "$MLFLOW_ROTATE_PASSWORD" "$user" >> "$out" || status=$?
+  if [ "$status" = 3 ]; then
+    trap - EXIT
+    die "the password of $user may or may not have changed. The new one is kept in $out: try it, delete the file if the old one still works"
+  fi
+  [ "$status" = 0 ] || die "the password of MLflow user $user was not changed"
+  echo "mlflow    $user: new password, the old one stops working now"
+  if [ "$user" = admin ]; then
+    echo "mlflow    replace the MLFLOW_ADMIN_PASSWORD line in the stack's .env with the one in the file,"
+    echo "          then bring the stack up again; until then access.sh gets a 401 as admin"
+  fi
+  keep_secret_file
+}
+
 list() {
   echo "S3 users (the admin key from .env is not listed):"
   printf 's3.user.list\n' | weed_shell
@@ -349,6 +401,7 @@ case ${1:-} in
   project-key) shift; project_key "$@" ;;
   project-check) shift; project_check "$@" ;;
   mlflow-user) shift; mlflow_user "$@" ;;
+  mlflow-rotate) shift; mlflow_rotate "$@" ;;
   list) list ;;
   *) usage ;;
 esac

@@ -78,8 +78,19 @@ scripts/access.sh list                                         # who has access,
 ```
 
 - **S3 key:** read and write objects in one bucket (`--readonly`: read only). No other bucket, no new buckets, no bucket deletion; the bucket is created if it is missing. Made with `s3.user.provision` of SeaweedFS, stored in its filer, so it survives restarts. A new key instead of the old one: `scripts/access.sh s3-rotate <user> <out-file>`.
-- **MLflow login:** not an admin. With `default_permission = READ` in `stack/mlflow/basic_auth.ini` it reads every experiment and model and gets `MANAGE` on what it creates; anything else is granted by an admin. Artifacts go through the MLflow server, so a person needs no S3 key for MLflow.
+- **MLflow login:** not an admin. With `default_permission = READ` in `stack/mlflow/basic_auth.ini` it reads every experiment and model and gets `MANAGE` on what it creates; anything else is granted by an admin. Artifacts go through the MLflow server, so a person needs no S3 key for MLflow. A new password instead of the old one: `scripts/access.sh mlflow-rotate <user> <out-file>`.
 - **Secrets never reach the terminal:** each command writes a new file with mode 600 as lines for an env file, and refuses to overwrite one. Combine it with the addresses from `.env.example` into the client `.env` and check: `uv run --env-file .env scripts/doctor.py --project-key`.
+
+### Changing keys and passwords
+
+A new key or password replaces the old one at once; nothing on the stack side has to be restarted for `s3-rotate`, `project-key --rotate` and `mlflow-rotate` of a person. What has to follow:
+
+| Changed | Then |
+|---|---|
+| `s3-rotate <user>` | put the new key wherever the old one is: the client `.env`, `~/.aws/credentials`, `.dvc/config.local` |
+| `project-key --rotate <project>` | restart the services that mount the file (`docker compose restart`). A running container does not see the new file: the old one was replaced, not rewritten |
+| `mlflow-rotate <user>` | put the new password into the person's client `.env` |
+| `mlflow-rotate admin` | replace `MLFLOW_ADMIN_PASSWORD` in `stack/.env`, bring the stack up again (`mlflow` is recreated), update the admins' client `.env` |
 
 In a deployment, run it through the deploy repo's `up.sh`, which knows the stack and the projects directory: `deploy/up.sh access list`.
 

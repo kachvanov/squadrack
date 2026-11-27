@@ -153,6 +153,21 @@ jobs:
           cat "$dir/rotated.env" >> "$dir/rotated-project.env"
           uv run --locked --env-file "$dir/rotated-project.env" scripts/doctor.py --project-key --only s3
 
+      - name: A new password with mlflow-rotate works, the old one is rejected
+        run: |
+          dir=$RUNNER_TEMP/access
+          scripts/access.sh mlflow-rotate ci-person "$dir/password.env"
+          if uv run --locked --env-file "$dir/rotated-project.env" scripts/doctor.py --only mlflow; then
+            echo "the old password still works"; exit 1
+          fi
+          grep -vE '^MLFLOW_TRACKING_(USERNAME|PASSWORD)=' "$dir/rotated-project.env" > "$dir/final.env"
+          cat "$dir/password.env" >> "$dir/final.env"
+          uv run --locked --env-file "$dir/final.env" scripts/doctor.py --only mlflow
+          if scripts/access.sh mlflow-rotate no-such-user "$dir/nobody.env"; then
+            echo "a password for a missing user"; exit 1
+          fi
+          [ ! -e "$dir/nobody.env" ]
+
       # The key of a project's services: a file in SQUADRACK_PROJECTS_DIR, read by the host user
       # demo-project-svc through an ACL, mounted into a container running as that user
       - name: A project key in the projects directory, read by the project user only
@@ -195,6 +210,19 @@ jobs:
         run: |
           uv run --locked --env-file .env examples/train_demo.py
           uv run --locked --env-file .env examples/predict_demo.py
+
+      # Last, because it changes the admin password of the stack for everything after it
+      - name: A new admin password with mlflow-rotate works, the old one is rejected
+        run: |
+          dir=$RUNNER_TEMP/access
+          scripts/access.sh mlflow-rotate admin "$dir/admin-password.env"
+          grep -qE '^MLFLOW_ADMIN_PASSWORD=.' "$dir/admin-password.env"
+          if uv run --locked --env-file .env scripts/doctor.py --only mlflow; then
+            echo "the old admin password still works"; exit 1
+          fi
+          grep -v '^MLFLOW_TRACKING_PASSWORD=' .env > "$dir/admin-rotated.env"
+          sed 's/^MLFLOW_ADMIN_PASSWORD=/MLFLOW_TRACKING_PASSWORD=/' "$dir/admin-password.env" >> "$dir/admin-rotated.env"
+          uv run --locked --env-file "$dir/admin-rotated.env" scripts/doctor.py --only mlflow
 
       - name: Stack status and logs
         if: failure()

@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `scripts/access.sh mlflow-rotate <user> <out-file>`: a new random password for an MLflow user, `admin` included.
+- README: what to restart or update after each kind of key or password change.
+
 ### Fixed
 
 - Deploy template: `up.sh` recreated the built services (`s3`, `mlflow`) on every run, even with nothing changed. The default provenance attestation gives a cached build a new image id when Docker uses the containerd image store. `up.sh` now builds with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`.

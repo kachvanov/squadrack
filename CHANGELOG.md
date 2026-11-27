@@ -4,7 +4,12 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] – 2026-11-27
+
+### Added
+
+- `scripts/access.sh mlflow-rotate <user> <out-file>`: a new random password for an MLflow user, `admin` included.
+- README: what to restart or update after each kind of key or password change.
 
 ### Fixed
 
@@ -97,6 +102,7 @@ First release: one stack on one host, a way to check it and an example deploymen
 
 - MLflow telemetry is off on the server, in the UI it serves and in clients configured from `.env.example` (`MLFLOW_DISABLE_TELEMETRY=true`); SeaweedFS telemetry is off too.
 
+[0.5.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.5.0
 [0.4.1]: https://github.com/kachvanov/squadrack/releases/tag/v0.4.1
 [0.4.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.4.0
 [0.3.0]: https://github.com/kachvanov/squadrack/releases/tag/v0.3.0

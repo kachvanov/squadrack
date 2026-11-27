@@ -45,8 +45,13 @@ data=$(abs "$SQUADRACK_DATA_DIR")
 [ -z "$(find "$secrets" -perm -004)" ] || die "$secrets is readable by everyone: chmod o-rwx $secrets"
 
 compose() {
-  # sudo resets the environment, so the values compose interpolates are passed explicitly
+  # sudo resets the environment, so the values compose interpolates are passed explicitly.
+  # No default build attestations: the provenance one records the time and the id of each build,
+  # so with the containerd image store even a fully cached build gets a new image id, and compose
+  # recreates the built services on every run. `provenance: false` in the compose file is not
+  # enough before Compose 5.5.1 (docker/compose#14111).
   $SUDO env \
+    BUILDX_NO_DEFAULT_ATTESTATIONS=1 \
     SQUADRACK_DATA_DIR="$data" \
     MLFLOW_PORT="$MLFLOW_PORT" \
     S3_PORT="$S3_PORT" \

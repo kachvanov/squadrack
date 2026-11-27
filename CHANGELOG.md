@@ -4,6 +4,16 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Deploy template: `up.sh` recreated the built services (`s3`, `mlflow`) on every run, even with nothing changed. The default provenance attestation gives a cached build a new image id when Docker uses the containerd image store. `up.sh` now builds with `BUILDX_NO_DEFAULT_ATTESTATIONS=1`.
+
+### Upgrading
+
+- Copy `examples/deploy/up.sh` into the deploy repo, or add `BUILDX_NO_DEFAULT_ATTESTATIONS=1` to the `env` line of its `compose()`. The first run after that recreates `s3` and `mlflow` once more; later runs leave them running.
+
 ## [0.4.1] – 2026-11-20
 
 ### Fixed
